@@ -16,7 +16,9 @@ const getAllVideos = asyncHandler(async (req, res) => {
 
 const publishAVideo = asyncHandler(async (req, res) => {
   // TODO: get video, upload to cloudinary, create video
-  const { title, description } = req.body;
+  const { title, description, isPublished } = req.body;
+
+  /* "isPublished" field is note checked. Because it is defined as true in Schema. So, if the uploader wants to keep it private he can provide false. */
 
   if (!title || !description) {
     throw new ApiError(400, "Title and description are required");
@@ -90,8 +92,42 @@ const publishAVideo = asyncHandler(async (req, res) => {
 });
 
 const getVideoById = asyncHandler(async (req, res) => {
-  const { videoId } = req.params;
   //TODO: get video by id
+  const { videoId } = req.params;
+
+  if (!videoId) {
+    throw new ApiError(400, "Video Id required");
+  }
+
+  const video = await Video.findById(videoId).populate(
+    "owner",
+    "-password -email -refreshToken"
+  );
+
+  if (!video) {
+    throw new ApiError(400, "Video not found");
+  }
+
+  console.log("Video views before: ", video.views);
+
+  // Update the video views
+  video.views += 1;
+  await video.save();
+
+  console.log("Video views after: ", video.views);
+
+  const loggedInUser = await User.findById(req.user?._id).select(
+    "-password -refreshToken"
+  );
+
+  // Update the watchHistory of the user who viewed the video
+  loggedInUser.watchHistory.push(video?._id);
+  await loggedInUser.save();
+  console.log(loggedInUser.watchHistory);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, video, "video fetched successfully"));
 });
 
 const updateVideo = asyncHandler(async (req, res) => {

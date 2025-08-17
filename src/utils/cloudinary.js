@@ -1,6 +1,7 @@
 import { v2 as cloudinary } from "cloudinary";
 import fs from "fs";
 import dotenv from "dotenv";
+import path from "path";
 
 dotenv.config();
 
@@ -15,13 +16,15 @@ const uploadOnCloudinary = async (localFilePath) => {
   try {
     if (!localFilePath) return null;
 
+    const absolutePath = path.resolve(localFilePath);
+
     const response = await cloudinary.uploader.upload(localFilePath, {
       resource_type: "auto",
     });
     console.log(`File uploaded on Cloudinary. File src: ${response.url}`);
 
     // once the file is uploaded, we would like to delete the file from our server(localstorage)
-    fs.unlinkSync(localFilePath);
+    fs.unlinkSync(absolutePath);
 
     return response;
   } catch (error) {
