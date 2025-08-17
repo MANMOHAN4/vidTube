@@ -1,10 +1,13 @@
 import mongoose, { isValidObjectId } from "mongoose";
-import { Video } from "../models/video.model.js";
-import { User } from "../models/user.model.js";
+import { Video } from "../models/video.models.js";
+import { User } from "../models/user.models.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import {
+  deleteFromCloudinary,
+  uploadOnCloudinary,
+} from "../utils/cloudinary.js";
 
 const getAllVideos = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query;
@@ -19,7 +22,71 @@ const publishAVideo = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Title and description are required");
   }
 
-  console.log(req.files);
+  const videoFileLocalPath = req.files?.videoFile?.[0]?.path;
+  const thumbnailLocalPath = req.files?.thumbnail?.[0]?.path;
+
+  if (!videoFileLocalPath) {
+    throw new ApiError(400, "Video-File is missing");
+  }
+  if (!thumbnailLocalPath) {
+    throw new ApiError(400, "Tumbnail is missing");
+  }
+
+  let videoFile;
+  try {
+    videoFile = await uploadOnCloudinary(videoFileLocalPath);
+    console.log("Video File uploaded", videoFile);
+  } catch (error) {
+    console.log("Error uploading videoFile", error);
+    throw new ApiError(500, "Failed to upload videoFile");
+  }
+
+  let thumbnail;
+  try {
+    thumbnail = await uploadOnCloudinary(thumbnailLocalPath);
+    console.log("Thumbnail uploaded", thumbnail);
+  } catch (error) {
+    console.log("Error uploading thumbnail", error);
+    throw new ApiError(500, "Failed to upload thumbnail");
+  }
+
+  // Creating a video in DB
+  try {
+    const video = await Video.create({
+      videoFile: videoFile.url,
+      thumbnail: thumbnail.url,
+      title,
+      description,
+      duration: videoFile.duration,
+      owner: req.user?._id,
+    });
+
+    // Fetching the video from DB using id
+    const createdVideo = await Video.findById(video._id);
+
+    if (!createdVideo) {
+      throw new ApiError(
+        500,
+        "Something went wrong while publishing the video"
+      );
+    }
+
+    // else return the response
+    return res
+      .status(200)
+      .json(new ApiResponse(200, createdVideo, "Video published successfully"));
+  } catch (error) {
+    // Data-base connection lost or something
+    console.log("Video not published");
+
+    if (videoFile) {
+      await deleteFromCloudinary(videoFile.public_id);
+    }
+
+    if (thumbnail) {
+      await deleteFromCloudinary(thumbnail.public_id);
+    }
+  }
 });
 
 const getVideoById = asyncHandler(async (req, res) => {
