@@ -139,7 +139,6 @@ const updateVideo = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Video-Id required");
   }
 
-  // returns the document with only the owner attribute
   const video = await Video.findById(videoId);
 
   if (!video) {
@@ -201,29 +200,26 @@ const deleteVideo = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Video-Id required");
   }
 
-  // returns the document with only the owner attribute
-  const video = await Video.findById(videoId, "owner");
+  const video = await Video.findById(videoId);
 
   if (!video) {
     throw new ApiError(400, "Video not found");
   }
 
+  // Authorization: Ensure the logged-in user is the owner of this video
   const isOwner = video?.owner.equals(req.user?._id);
 
-  if (isOwner) {
-    console.log("Owner");
-  } else {
-    console.log("Not owner");
+  if (!isOwner) {
+    throw new ApiError(401, "Only owner (creator) can delete the video");
   }
 
-  // const deletedVideo = await Video.findByIdAndDelete(videoId, {
-  //   projection: {
-  //     title: 1,
-  //     description: 1,
-  //     views: 1,
-  //     duration: 1,
-  //   },
-  // });
+  console.log("Owner");
+
+  await video.deleteOne();
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, video, "Video deleted successfully"));
 });
 
 const togglePublishStatus = asyncHandler(async (req, res) => {
