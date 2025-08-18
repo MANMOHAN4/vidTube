@@ -99,6 +99,7 @@ const getVideoById = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Video Id required");
   }
 
+  // populate the creator's essential data (Since, creators name and avatar is displayed below video)
   const video = await Video.findById(videoId).populate(
     "owner",
     "-password -email -refreshToken"
@@ -134,6 +135,24 @@ const updateVideo = asyncHandler(async (req, res) => {
   //TODO: update video details like title, description, thumbnail
   const { videoId } = req.params;
 
+  if (!videoId) {
+    throw new ApiError(400, "Video-Id required");
+  }
+
+  // returns the document with only the owner attribute
+  const video = await Video.findById(videoId);
+
+  if (!video) {
+    throw new ApiError(400, "Video not found");
+  }
+
+  // Authorization: Ensure the logged-in user is the owner of this video
+  const isOwner = video?.owner.equals(req.user?._id);
+
+  if (!isOwner) {
+    throw new ApiError(401, "Only owner (creator) can update the video");
+  }
+
   const { title, description } = req.body;
 
   if (!title || !description) {
@@ -156,19 +175,12 @@ const updateVideo = asyncHandler(async (req, res) => {
     );
   }
 
-  const video = await Video.findByIdAndUpdate(
-    videoId,
-    {
-      $set: {
-        title,
-        description,
-        thumbnail: thumbnail.url,
-      },
-    },
-    {
-      new: true,
-    }
-  ).select("-videoFile -duration");
+  // update the video
+  video.title = title;
+  video.description = description;
+  video.thumbnail = thumbnail.url;
+
+  await video.save();
 
   return res
     .status(200)
@@ -184,6 +196,34 @@ const updateVideo = asyncHandler(async (req, res) => {
 const deleteVideo = asyncHandler(async (req, res) => {
   //TODO: delete video
   const { videoId } = req.params;
+
+  if (!videoId) {
+    throw new ApiError(400, "Video-Id required");
+  }
+
+  // returns the document with only the owner attribute
+  const video = await Video.findById(videoId, "owner");
+
+  if (!video) {
+    throw new ApiError(400, "Video not found");
+  }
+
+  const isOwner = video?.owner.equals(req.user?._id);
+
+  if (isOwner) {
+    console.log("Owner");
+  } else {
+    console.log("Not owner");
+  }
+
+  // const deletedVideo = await Video.findByIdAndDelete(videoId, {
+  //   projection: {
+  //     title: 1,
+  //     description: 1,
+  //     views: 1,
+  //     duration: 1,
+  //   },
+  // });
 });
 
 const togglePublishStatus = asyncHandler(async (req, res) => {
