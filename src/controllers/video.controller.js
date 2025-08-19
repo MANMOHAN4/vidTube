@@ -64,7 +64,7 @@ const publishAVideo = asyncHandler(async (req, res) => {
     });
 
     // Fetching the video from DB using id
-    const createdVideo = await Video.findById(video._id);
+    const createdVideo = await Video.findById(video?._id);
 
     if (!createdVideo) {
       throw new ApiError(
@@ -73,7 +73,6 @@ const publishAVideo = asyncHandler(async (req, res) => {
       );
     }
 
-    // else return the response
     return res
       .status(200)
       .json(new ApiResponse(200, createdVideo, "Video published successfully"));
@@ -224,6 +223,51 @@ const deleteVideo = asyncHandler(async (req, res) => {
 
 const togglePublishStatus = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
+
+  if (!videoId) {
+    throw new ApiError(400, "Video-Id required");
+  }
+
+  const video = await Video.findById(videoId);
+
+  if (!video) {
+    throw new ApiError(400, "Video not found");
+  }
+
+  // Authorization: Ensure the logged-in user is the owner of this video
+  const isOwner = video?.owner.equals(req.user?._id);
+
+  if (!isOwner) {
+    throw new ApiError(
+      401,
+      "Only owner (creator) can toggle the status of video"
+    );
+  }
+
+  console.log("Video publish status (BEFORE): ", video.isPublished);
+
+  if (video.isPublished) {
+    video.isPublished = false;
+  } else {
+    video.isPublished = true;
+  }
+
+  console.log("Video publish status (AFTER): ", video.isPublished);
+
+  await video.save();
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        title: video.title,
+        description: video.description,
+        thumbnail: video.thumbnail,
+        isPublished: video.isPublished,
+      },
+      "Video publish status toggled successfully"
+    )
+  );
 });
 
 export {
