@@ -12,6 +12,83 @@ import {
 const getAllVideos = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query;
   //TODO: get all videos based on query, sort, pagination
+
+  // Convert pagination params to integers
+  const pageNumber = parseInt(page);
+  const pageLimit = parseInt(limit);
+
+  if (isNaN(pageNumber) || pageNumber < 1) {
+    throw new ApiError(400, "Invalid page number");
+  }
+
+  if (isNaN(pageLimit) || pageLimit < 1) {
+    throw new ApiError(400, "Invalid limit number");
+  }
+
+  const validSortFields = ["views", "createdAt"];
+  if (!validSortFields.includes(sortBy)) {
+    throw new ApiError(
+      400,
+      `Invalid sort field. Valid options are: ${validSortFields.join(", ")}`
+    );
+  }
+
+  const validSortTypes = ["asc", "desc"];
+  if (!validSortTypes.includes(sortType)) {
+    throw new ApiError(
+      400,
+      `Invalid sort type. Valid options are: ${validSortTypes.join(", ")}`
+    );
+  }
+
+  // Calculate the skip value for pagination
+  const skip = (pageNumber - 1) * pageLimit;
+
+  // Build the filter object
+  const filter = {
+    isPublished: true, // Videos with publish status as true
+  };
+
+  if (userId) {
+    filter.userId = userId;
+  }
+
+  if (query) {
+    // If a query string is provided, search in title or description
+    filter.$or = [
+      { title: { $regex: query, $options: "i" } },
+      { description: { $regex: query, $options: "i" } },
+    ];
+  }
+
+  // Built the sort object
+  const sort = {};
+
+  sort[sortBy] = sortType === "asc" ? 1 : -1;
+
+  try {
+    const videos = await Video.find(filter)
+      .skip(skip)
+      .limit(pageLimit)
+      .sort(sort);
+
+    const totalVideos = await Video.countDocuments(filter);
+
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        videos,
+        {
+          page: pageNumber,
+          limit: pageLimit,
+          totalVideos,
+        },
+        "Video fetched successfully"
+      )
+    );
+  } catch (error) {
+    throw new ApiError(500, error.message);
+  }
 });
 
 const publishAVideo = asyncHandler(async (req, res) => {
