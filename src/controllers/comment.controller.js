@@ -59,6 +59,38 @@ const addComment = asyncHandler(async (req, res) => {
 
 const updateComment = asyncHandler(async (req, res) => {
   // TODO: update a comment
+  const { commentId } = req.params;
+
+  if (!commentId) {
+    throw new ApiError(400, "Comment-Id is required");
+  }
+
+  const comment = await Comment.findById(commentId);
+
+  if (!comment) {
+    throw new ApiError(400, "Comment not found");
+  }
+
+  // Validate that the current user is the one who commented on video.
+  if (!comment?.owner.equals(req.user?._id)) {
+    throw new ApiError(400, "You are not allowed to edit this comment");
+  }
+  console.log(1);
+
+  const { content } = req.body;
+
+  if (!content) {
+    throw new ApiError(400, "Content is required");
+  }
+
+  // Update the comment.
+  comment.content = content;
+
+  await comment.save();
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, comment, "Updated the comment successfully"));
 });
 
 const deleteComment = asyncHandler(async (req, res) => {
